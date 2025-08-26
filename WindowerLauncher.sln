@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36401.2 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindowerLauncher", "WindowerLauncher\WindowerLauncher.csproj", "{ADEE228F-89F3-47AA-A699-941C012AF0B6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ADEE228F-89F3-47AA-A699-941C012AF0B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ADEE228F-89F3-47AA-A699-941C012AF0B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ADEE228F-89F3-47AA-A699-941C012AF0B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ADEE228F-89F3-47AA-A699-941C012AF0B6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {17427318-7278-487D-9252-5BA44DB2F4A5}
+	EndGlobalSection
+EndGlobal
