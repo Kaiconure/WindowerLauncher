@@ -1,5 +1,5 @@
 # WindowerLauncher
-## Introduction
+## 1. Introduction
 
 [WindowerLauncher](https://github.com/Kaiconure/WindowerLauncher/) is a tool to launch Windower4 while managing multiple POL login profiles. It's mainly targeted at anyone with 5+ accounts, to simplify working around the 4-account limit set by POL.
 
@@ -7,7 +7,7 @@ It works by safely organizing multiple versions of your `login_w.bin` file, with
 
 **WindowerLauncher is a command line tool**, but that's only a concern when setting up and managing profiles. Once you're configured, you won't need to worry about using the command line again unless you want to make changes.
 
-## Installation
+## 2. Installation
 
 Get the [latest release](https://github.com/Kaiconure/WindowerLauncher/releases/), and extract it directly into your Windower4 installation folder. You should have WindowerLauncher.exe sitting side-by-side with Windower.exe.
 
@@ -15,11 +15,11 @@ If you don't know where Windower was installed, you can check the following loca
 
 - *C:\Program Files (x86)\Windower4*
 - *C:\Windower4*
-- *C:\Users\\&lt;**your-account>**\Downloads\Windower4*
+- *C:\Users\\&lt;**your-account>**\Downloads\* - This is for anyone who downloaded the executable and just ran it straight out of your Downloads. :sweat_smile:
 
 If none of these work for you, right-click your Windower shortcut, right-click "Windower Launcher" (unrelated to WindowerLauncher, sorry for the confusion), left-click on "Properties", and check the "Target" box.
 
-## How it works
+## 3. How it works
 
 First of all, WindowerLauncher *always* backs up your `login_w.bin` before replacing it. The last 10 versions can be found in timestamped files in a subdirectory named `.wlbackups` under where your `login_w.bin` file is located. By default, that would be something like this for a Steam install:
 
@@ -37,18 +37,15 @@ Anyway, the pre-first step (Step #0?) is to be sure POL is set up the way you wa
 
 Now, let's go ahead and create our profile.
 
-1. Open a Windows command prompt. The easiest way to do this is to open the Start Menu, type "Command Prompt" into the search, and click on the resulting icon.
-   - You can also hit Win+R on the keyboard, type `cmd`, and press enter.
-   - Depending on the tools you have installed, you may just be able to right-click on your folder and click "Open in Terminal", "Open Command Line Here", or some other similar option.
-2. In the command prompt, navigate to the Windower4 install folder which you identified in the **Installation** section above.
-   - Type `cd "C:\Program Files (x86)\Windower4"` into the command prompt and hit enter, replacing the path with your own installation path. Note that `cd` is short for "change directory".
-   - If your installation path is **not** on your system drive (let's say it's on your E drive), you will also need to type the drive letter followed by a colon and then hit enter. For example, `E:`.
+1. Browse to the Windower4 install folder in Windows Explorer. This is the same folder you identified in the **Installation** section above.
+2. Open a Windows command prompt in your Windower4 install folder. The easiest way to do this is to double-click the `WindowerLauncher Command Prompt.cmd` file that installed with WindowerLauncher.
 3. Now, let's create our new `Main` profile.
    - Type the following into the command prompt, and hit enter: `WindowerLauncher.exe save -name:Main`
 4. You will now notice two things:
    - There will be a new batch file, `_run_profile.Main.bat`, in your Windower4 installation folder.
    - There will be a new bin file alongside your `login_w.bin` named `login_w_Main.bin`.
-5. Anytime you want to run with this profile, just double-click on `_run_profile.Main.bat`. This will backup the currently active profile, activate the "Main" profile you just saved in POL, and launch Windower.
+   - A desktop shortcut to your new profile, `Main - WindowerLauncher.lnk`. This is what you will typically use to launch your new profile.
+5. Anytime you want to run with this profile, just double-click either the desktop shortcut (preferred) or the `_run_profile.Main.bat` file. This will backup the currently active profile, activate the "Main" profile you just saved in POL, and launch Windower.
 6. If you ever want to modify the profile, just make your changes in POL. Once done, follow steps 1-3 here **but change the command in #3** to this instead:
    - `WindowerLauncher.exe save -name:Main -force`
    - WindowerLauncher will not allow you to save over an existing profile unless you use the `-force` option.
@@ -68,11 +65,29 @@ Now that you're ready, let's set up your new profile:
 3. Add the accounts you want for this second profile, and exit POL.
 4. Now let's create our secondary WindowerLauncher profile, which for the sake of example we will call `Secondary`:
    - `WindowerLauncher.exe save -name:Secondary`
-5. As before, you will see the following changes at this point:
+5. As before, you will see the following changes at this point. These should all look somewhat familiar:
    - There will be a new batch file, `_run_profile.Secondary.bat`, in your Windower4 installation folder.
    - There will be a new bin file alongside your `login_w.bin` named `login_w_Secondary.bin`.
-6. Anytime you want to run with this profile, just double-click on `_run_profile.Secondary.bat`. This will backup the currently active profile, activate the "Secondary" profile you just saved in POL, and launch Windower.
+   - A desktop shortcut to your new profile, `Secondary - WindowerLauncher.lnk`. This is what you will typically use to launch your new profile.
+6. Anytime you want to run with this profile, just double-click either the desktop shortcut (preferred) or the `_run_profile.Secondary.bat` file. This will backup the currently active profile, activate the "Secondary" profile you just saved in POL, and launch Windower.
 7. You're good to go!
 
 You can go ahead and setup as many profiles as you want, following the procedure for creating secondary profiles.
+
+## 4. FAQ
+
+#### What if I have multiple PlayOnline locales installed?
+
+All WindowerLauncher commands support a `-locale:<LOCALE>` command line option. Supported values for locale are `US`, `JP`, and `EU`. By default, WindowerLauncher will search for installations *in that order*, and use the first one it finds. If you want to override this, just add the specific locale you want to use.
+
+For example, let's say you're using the JP client. You might run commands like the following:
+
+```bash
+WindowerLauncher.exe new -locale:JP
+WindowerLauncher.exe save -name:Secondary -locale:JP
+```
+
+You batch files will preserve the locale they were created with.
+
+Note that I recommend *not* creating profiles across locales with the same names. While your underlying POL login data files will be fine, the launcher batch files created with WindowerLauncher could get overwritten.
 
