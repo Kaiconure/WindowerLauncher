@@ -15,7 +15,7 @@ If you don't know where Windower was installed, you can check the following loca
 
 - *C:\Program Files (x86)\Windower4*
 - *C:\Windower4*
-- *C:\Users\\&lt;**your-account>**\Downloads\* - This is for anyone who downloaded the executable and just ran it straight out of your Downloads. :sweat_smile:
+- *C:\Users\\&lt;**your-account>**\Downloads* - This is for anyone who downloaded the executable and just ran it straight out of your Downloads. :sweat_smile:
 
 If none of these work for you, right-click your Windower shortcut, right-click "Windower Launcher" (unrelated to WindowerLauncher, sorry for the confusion), left-click on "Properties", and check the "Target" box.
 
