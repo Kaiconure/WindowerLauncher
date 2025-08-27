@@ -1,4 +1,5 @@
-﻿using Microsoft.Win32;
+﻿using IWshRuntimeLibrary;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,6 +8,8 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+
+using File = System.IO.File;
 
 namespace WindowerLauncher
 {
@@ -72,7 +75,8 @@ namespace WindowerLauncher
                 return;
             }
 
-            var polPath = GetPolPath();
+            this.commands.GetArgumentString("locale", out var locale);
+            var polPath = GetPolPath(ref locale);
             if (polPath == null)
             {
                 logger.Error("Could not find PlayOnline installation.");
@@ -120,17 +124,17 @@ namespace WindowerLauncher
                     $"REM    [{name}]",
                     $"REM --------------------------------------------------------------",
                     "",
-                    $"REM For reference, we detected your PlayOnline login data file at:",
+                    $"REM For reference, we detected your PlayOnline{locale} login data file at:",
                     $"REM    [{loginFile.FullName}]",
                     "",
                     $"REM Always run out of the batch file directory. Everything needs to live side-by-side.",
                     $"PUSHD %~dp0",
                     "",
                     $"REM Run the current profile.",
-                    $"\"{appFile.Name}\" run -name:\"{name}\"",
+                    $"\"{appFile.Name}\" run -name:\"{name}\" -locale:{locale}",
                     "",
                     $"REM Remove older backups so they don't grow indefinitely. You can adjust the number of files to leave behind if you'd like.",
-                    $"\"{appFile.Name}\" minify -leave:10",
+                    $"\"{appFile.Name}\" minify -leave:10 -locale:{locale}",
                     "",
                     $"REM Restore the original worknig directory now that we're done.",
                     "POPD",
@@ -143,11 +147,14 @@ namespace WindowerLauncher
             logger.Log("Successfully saved login profile launcher to:");
             logger.Log($"  {batFile.FullName}");
 
+            logger.Log("Saving desktop shortcut...");
+            CreateProfileShortcut(batFile, name, locale);
         }
 
         private void DoNew()
         {
-            var polPath = GetPolPath();
+            this.commands.GetArgumentString("locale", out var locale);
+            var polPath = GetPolPath(ref locale);
             if (polPath == null)
             {
                 logger.Error("Could not find PlayOnline installation.");
@@ -166,7 +173,7 @@ namespace WindowerLauncher
                     backupFile.Directory.Create();
                 }
                 var fi = loginFile.CopyTo(backupFile.FullName, true);
-                if(!fi.Exists)
+                if (!fi.Exists)
                 {
                     logger.Error("Failed to create backup of existing login profile. Aborting.");
                     return;
@@ -192,7 +199,8 @@ namespace WindowerLauncher
                 return;
             }
 
-            var polPath = GetPolPath();
+            this.commands.GetArgumentString("locale", out var locale);
+            var polPath = GetPolPath(ref locale);
             if (polPath == null)
             {
                 logger.Error("Could not find PlayOnline installation.");
@@ -246,7 +254,8 @@ namespace WindowerLauncher
 
         private void DoMinify()
         {
-            var polPath = GetPolPath();
+            this.commands.GetArgumentString("locale", out var locale);
+            var polPath = GetPolPath(ref locale);
             if (polPath == null)
             {
                 logger.Error("Could not find PlayOnline installation.");
@@ -307,25 +316,58 @@ namespace WindowerLauncher
             @"SOFTWARE\PlayOnlineEU\InstallFolder",
         };
 
+        private void CreateProfileShortcut(FileInfo fileInfo, string profileName, string profileLocale)
+        {
+            WshShell wsh = new WshShell();
+
+            var shortcutFile = new FileInfo(
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+                    $"{profileName} - WindowerLauncher.lnk"
+                    ));
+
+            IWshShortcut shortcut = wsh.CreateShortcut(shortcutFile.FullName) as IWshRuntimeLibrary.IWshShortcut;
+            shortcut.Arguments = "";
+            shortcut.TargetPath = fileInfo.FullName;
+            shortcut.WindowStyle = 1;
+            shortcut.Description = $"Runs WindowerLauncher for {profileName} ({profileLocale})";
+            shortcut.WorkingDirectory = fileInfo.Directory.FullName;
+            shortcut.IconLocation = Path.Combine(fileInfo.Directory.FullName, "Windower.ico");
+            shortcut.Save();
+        }
+
         /// <summary>
         /// Get the PlayOnline installation path from the registry.
         /// </summary>
         /// <returns>Returns a DirectoryInfo object if a valid folder is found, or null otherwise.</returns>
-        private DirectoryInfo GetPolPath()
+        private DirectoryInfo GetPolPath(ref string locale)
         {
             foreach (var path in PolRegistryPaths)
             {
-                using (var key = Registry.LocalMachine.OpenSubKey(path))
+                if (string.IsNullOrWhiteSpace(locale) || path.EndsWith($@"\PlayOnline{locale}\InstallFolder", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (key != null)
+                    var currentLocale = 
+                        path.EndsWith(@"\PlayOnlineUS\InstallFolder", StringComparison.OrdinalIgnoreCase) ? "US" :
+                        path.EndsWith(@"\PlayOnlineJP\InstallFolder", StringComparison.OrdinalIgnoreCase) ? "JP" :
+                        path.EndsWith(@"\PlayOnlineEU\InstallFolder", StringComparison.OrdinalIgnoreCase) ? "EU" : null;
+
+                    if (currentLocale != null)
                     {
-                        var polPath = key.GetValue("1000") as string;
-                        if (!string.IsNullOrWhiteSpace(polPath))
+                        using (var key = Registry.LocalMachine.OpenSubKey(path))
                         {
-                            var di = new DirectoryInfo(polPath);
-                            if (di.Exists)
+                            if (key != null)
                             {
-                                return di;
+                                var polPath = key.GetValue("1000") as string;
+                                if (!string.IsNullOrWhiteSpace(polPath))
+                                {
+                                    var di = new DirectoryInfo(polPath);
+                                    if (di.Exists)
+                                    {
+                                        logger.Log($"Found PlayOnline{currentLocale} install:\n    {di.FullName}\n");
+                                        locale = currentLocale;
+                                        return di;
+                                    }
+                                }
                             }
                         }
                     }
