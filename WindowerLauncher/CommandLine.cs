@@ -91,6 +91,7 @@ namespace WindowerLauncher
         Save,
         Run,
         Minify,
-        New
+        New,
+        Activate
     }
 }
