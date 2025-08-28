@@ -8,7 +8,7 @@ It works by safely organizing multiple versions of your `login_w.bin` file, with
 
 **WindowerLauncher is a command line tool**, but that's only a concern when setting up and managing profiles. Once you're configured, you won't need to worry about using the command line again unless you want to make changes.
 
-> Check out our [Releases](https://github.com/Kaiconure/WindowerLauncher/releases) to download the latest version and to see what's new.
+> Check out our [Releases page](https://github.com/Kaiconure/WindowerLauncher/releases) to download the latest version and to see what's new.
 
 ## Setup and Configuration
 
