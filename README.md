@@ -1,4 +1,5 @@
 # WindowerLauncher
+
 ## Introduction
 
 [WindowerLauncher](https://github.com/Kaiconure/WindowerLauncher/) is a tool to launch Windower4 while managing multiple POL login profiles. It is mainly targeted at anyone with 5+ accounts, to simplify working around the 4-account limit set by POL.
@@ -6,6 +7,8 @@
 It works by safely organizing multiple versions of your `login_w.bin` file, with backups, to allow you to easily switch between named profiles.
 
 **WindowerLauncher is a command line tool**, but that's only a concern when setting up and managing profiles. Once you're configured, you won't need to worry about using the command line again unless you want to make changes.
+
+> Check out our [Releases](https://github.com/Kaiconure/WindowerLauncher/releases) to download the latest version and to see what's new.
 
 ## Setup and Configuration
 
