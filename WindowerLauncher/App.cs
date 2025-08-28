@@ -23,13 +23,35 @@ namespace WindowerLauncher
         public App(CommandLine commands)
         {
             this.commands = commands;
-            this.appFile = new FileInfo(Assembly.GetEntryAssembly().Location) 
+            this.appFile = new FileInfo(Assembly.GetEntryAssembly().Location)
                 ?? throw new Exception("Unable to determine the application path.");
             this.appDirectory = this.appFile.Directory;
         }
 
+        /// <summary>
+        /// Cleans up files and folders from older versions, which are no longer relevant. If necessary, upgrades
+        /// will occur (converting from old schema to new, etc).
+        /// </summary>
+        private void VersionCleanup()
+        {
+            try
+            {
+                var prompCmd = new FileInfo(Path.Combine(this.appDirectory.FullName, "Command Prompt.cmd"));
+                if (prompCmd.Exists)
+                {
+                    prompCmd.Delete();
+                }
+            }
+            catch(Exception ex)
+            {
+                this.logger.Log("Warning: Version cleanup failed: {0}", ex.ToString());
+            }
+        }
+
         public void Run()
         {
+            this.VersionCleanup();
+
             try
             {
                 switch (this.commands.Type)
@@ -159,7 +181,7 @@ namespace WindowerLauncher
 
             File.WriteAllBytes(loginFile.FullName, Resources.login_w);
 
-            if(this.commands.GetArgumentBool("launch"))
+            if (this.commands.GetArgumentBool("launch"))
             {
                 logger.Log("Your current login profile has been reset. Launching Windower now...");
                 this.RunWindower();
@@ -209,19 +231,26 @@ namespace WindowerLauncher
                 return;
             }
 
-            var backupFile = new FileInfo(Path.Combine(loginDir.FullName, ".wlbackups", $"login_w_backup_{DateTime.Now.ToString("yyyyMMdd_HHmmss")}.bin"));
-            logger.Log($"Backing up current login profile to: {backupFile.FullName}");
-            if (!backupFile.Directory.Exists)
+            if (!this.AreFilesIdentical(loginFile, sourceFile))
             {
-                backupFile.Directory.Create();
+                var backupFile = new FileInfo(Path.Combine(loginDir.FullName, ".wlbackups", $"login_w_backup_{DateTime.Now.ToString("yyyyMMdd_HHmmss")}.bin"));
+                logger.Log($"Backing up current login profile to: {backupFile.FullName}");
+                if (!backupFile.Directory.Exists)
+                {
+                    backupFile.Directory.Create();
+                }
+                loginFile.CopyTo(backupFile.FullName, true);
+
+                // Perform a minification step after saving the current backup
+                this.DoMinify();
+
+                logger.Log($"Activating profile: {name}");
+                sourceFile.CopyTo(loginFile.FullName, true);
             }
-            loginFile.CopyTo(backupFile.FullName, true);
-
-            // Perform a minification step after saving the current backup
-            this.DoMinify();
-
-            logger.Log($"Activating profile: {name}");
-            sourceFile.CopyTo(loginFile.FullName, true);
+            else
+            {
+                logger.Log($"Profile '{name}' is already active, no changes were made. Proceeding...");
+            }
 
             // Launch windower, unless we're running in "Activate" mode (set up but don't launch)
             if (this.commands.Type != CommandType.Activate)
@@ -322,6 +351,16 @@ namespace WindowerLauncher
                 shortcut.WorkingDirectory = appFile.Directory.FullName;
                 shortcut.IconLocation = Path.Combine(appFile.Directory.FullName, "Icon.ico");
                 shortcut.Save();
+
+                // This nonsense is required to make the "Run as administrator" option checked by default. One would
+                // think there would be a better way to do this, but apparently not.
+                using (var stream = new FileStream(shortcutFile.FullName, FileMode.Open, FileAccess.ReadWrite))
+                {
+                    stream.Seek(21, SeekOrigin.Begin);  // Move to byte offset 21
+                    int b = stream.ReadByte();          // Read the current byte
+                    stream.Seek(21, SeekOrigin.Begin);  // Go back to the position
+                    stream.WriteByte((byte)(b | 0x20)); // Set the sixth bit (0x20) to enable "Run as administrator"
+                }
             }
 
             var batchFile = new FileInfo(Path.Combine(appDirectory.FullName, "profiles", shortcutName + ".bat"));
@@ -350,6 +389,32 @@ namespace WindowerLauncher
             var process = System.Diagnostics.Process.Start(startInfo);
         }
 
+        private bool AreFilesIdentical(FileInfo f1, FileInfo f2)
+        {
+            f1.Refresh();
+            f2.Refresh();
+
+            if (!f1.Exists || !f2.Exists)
+            { 
+                return false; 
+            }
+
+            if (f1.Length != f2.Length)
+            {
+                return false;
+            }
+
+            var b1 = File.ReadAllBytes(f1.FullName);
+            var b2 = File.ReadAllBytes(f2.FullName);
+
+            if (b1.Length != b2.Length)
+            {
+                return false;
+            }
+
+            return b1.SequenceEqual(b2);
+        }
+
         /// <summary>
         /// Get the PlayOnline installation path from the registry.
         /// </summary>
@@ -360,7 +425,7 @@ namespace WindowerLauncher
             {
                 if (string.IsNullOrWhiteSpace(locale) || path.EndsWith($@"\PlayOnline{locale}\InstallFolder", StringComparison.OrdinalIgnoreCase))
                 {
-                    var currentLocale = 
+                    var currentLocale =
                         path.EndsWith(@"\PlayOnlineUS\InstallFolder", StringComparison.OrdinalIgnoreCase) ? "US" :
                         path.EndsWith(@"\PlayOnlineJP\InstallFolder", StringComparison.OrdinalIgnoreCase) ? "JP" :
                         path.EndsWith(@"\PlayOnlineEU\InstallFolder", StringComparison.OrdinalIgnoreCase) ? "EU" : null;
