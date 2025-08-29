@@ -12,7 +12,7 @@ It works by safely organizing multiple versions of your `login_w.bin` file, with
 
 ## Setup and Configuration
 
-Check out the WindowerLauncher wiki for instructions.
+Check out the WindowerLauncher wiki for information and instructions. Here are some starting points for you to browse:
 
 **Intro**
 - [Introduction to WindowerLauncher](https://github.com/Kaiconure/WindowerLauncher/wiki)
