@@ -18,9 +18,9 @@ Check out the WindowerLauncher wiki for instructions.
 - [Introduction to WindowerLauncher](https://github.com/Kaiconure/WindowerLauncher/wiki)
   
 **Setup**
-1. [Download and Installation](https://github.com/Kaiconure/WindowerLauncher/wiki/Installation-Guide)
-2. [Saving your profile](https://github.com/Kaiconure/WindowerLauncher/wiki/Saving-your-profile)
-3. [Creating and saving secondary profiles](https://github.com/Kaiconure/WindowerLauncher/wiki/Creating-new-profiles)
+- Step 1: [Download and Installation](https://github.com/Kaiconure/WindowerLauncher/wiki/Installation-Guide)
+- Step 2: [Saving your profile](https://github.com/Kaiconure/WindowerLauncher/wiki/Saving-your-profile)
+- Step 3: [Creating and saving secondary profiles](https://github.com/Kaiconure/WindowerLauncher/wiki/Creating-new-profiles)
 
 **Quick Start**
 - [Walkthrough: Six-account setup](https://github.com/Kaiconure/WindowerLauncher/wiki/Six-Account-Setup)
