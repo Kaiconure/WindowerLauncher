@@ -23,7 +23,7 @@ Check out the WindowerLauncher wiki for instructions.
 - Step 3: [Creating and saving secondary profiles](https://github.com/Kaiconure/WindowerLauncher/wiki/Creating-new-profiles)
 
 **Quick Start**
-- [Walkthrough: Six-account setup](https://github.com/Kaiconure/WindowerLauncher/wiki/Six-Account-Setup)
+- [Walk-through: Six-account setup](https://github.com/Kaiconure/WindowerLauncher/wiki/Six-Account-Setup)
 
 ## FAQ
 
