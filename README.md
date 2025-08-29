@@ -14,10 +14,16 @@ It works by safely organizing multiple versions of your `login_w.bin` file, with
 
 Check out the WindowerLauncher wiki for instructions.
 
+**Intro**
 - [Introduction to WindowerLauncher](https://github.com/Kaiconure/WindowerLauncher/wiki)
-- [Download and Installation](https://github.com/Kaiconure/WindowerLauncher/wiki/Installation-Guide)
-- [Saving your profile](https://github.com/Kaiconure/WindowerLauncher/wiki/Saving-your-profile)
-- [Creating and saving secondary profiles](https://github.com/Kaiconure/WindowerLauncher/wiki/Creating-new-profiles)
+  
+**Setup**
+1. [Download and Installation](https://github.com/Kaiconure/WindowerLauncher/wiki/Installation-Guide)
+2. [Saving your profile](https://github.com/Kaiconure/WindowerLauncher/wiki/Saving-your-profile)
+3. [Creating and saving secondary profiles](https://github.com/Kaiconure/WindowerLauncher/wiki/Creating-new-profiles)
+
+**Quick Start**
+- [Walkthrough: Six-account setup](https://github.com/Kaiconure/WindowerLauncher/wiki/Six-Account-Setup)
 
 ## FAQ
 
