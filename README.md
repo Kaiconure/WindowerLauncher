@@ -19,6 +19,7 @@ Check out the WindowerLauncher wiki for information and instructions. Here are s
 
 **Quick Start**
 - [Walk-through: Six-account setup](https://github.com/Kaiconure/WindowerLauncher/wiki/Six-Account-Setup)
+- [Command line cheat sheet](https://github.com/Kaiconure/WindowerLauncher/wiki/Command-line-cheat-sheet)
   
 **General Setup**
 
