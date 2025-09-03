@@ -92,6 +92,9 @@ namespace WindowerLauncher
         Run,
         Minify,
         New,
-        Activate
+        Activate,
+        Id,
+        Ident,
+        Identify
     }
 }

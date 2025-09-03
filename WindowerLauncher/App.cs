@@ -54,6 +54,12 @@ namespace WindowerLauncher
 
             try
             {
+                this.logger.Log("");
+                this.logger.Log(" ===========================================================");
+                this.logger.Log("  Welcome to WindowerLauncher v{0}!", Assembly.GetEntryAssembly().GetName().Version.ToString(3));
+                this.logger.Log(" ===========================================================");
+                this.logger.Log("");
+
                 switch (this.commands.Type)
                 {
                     case CommandType.None:
@@ -72,6 +78,11 @@ namespace WindowerLauncher
                     case CommandType.Minify:
                         this.DoMinify();
                         break;
+                    case CommandType.Id:
+                    case CommandType.Ident:
+                    case CommandType.Identify:
+                        this.DoIdentify();
+                        break;
                 }
             }
             catch (Exception ex)
@@ -79,7 +90,7 @@ namespace WindowerLauncher
                 logger.Error("An unexpected error occurred: {0}", ex.ToString());
             }
 
-            logger.Log("");
+            //logger.Log("");
         }
 
         private void DoNone()
@@ -91,6 +102,7 @@ namespace WindowerLauncher
             Console.WriteLine("  new        Creates a new, blank profile.");
             Console.WriteLine("  run        Run Windower using the specified profile.");
             Console.WriteLine("  activate   Sets up a profile but does not run it (same as run, but Windower is not launched).");
+            Console.WriteLine("  id         Tries to identify the profile that matches the current PlayOnline login_w.bin file.");
             Console.WriteLine("  minify     Remove old backups.");
         }
 
@@ -143,7 +155,11 @@ namespace WindowerLauncher
 
             logger.Log("Saving desktop shortcut...");
             this.commands.GetArgumentInt("leave", out var leave, 10);
-            CreateProfileShortcut(name, locale, Math.Max(leave, 1));
+
+            this.commands.GetArgumentInt("count", out var count, 1);
+            count = Math.Min(Math.Max(count, 1), 4);
+
+            CreateProfileShortcut(name, locale, Math.Max(leave, 1), count);
         }
 
         private void DoNew()
@@ -255,7 +271,13 @@ namespace WindowerLauncher
             // Launch windower, unless we're running in "Activate" mode (set up but don't launch)
             if (this.commands.Type != CommandType.Activate)
             {
-                this.RunWindower();
+                this.commands.GetArgumentInt("count", out var count, 1);
+                count = Math.Min(Math.Max(count, 1), 4);
+
+                for (var i = 0; i < count; i++)
+                {
+                    this.RunWindower(i);
+                }
             }
         }
 
@@ -309,6 +331,42 @@ namespace WindowerLauncher
             logger.Log("Deleted {0} old backup(s).", numDeleted);
         }
 
+        private void DoIdentify()
+        {
+            this.commands.GetArgumentString("locale", out var locale);
+            var polPath = GetPolPath(ref locale);
+            if (polPath == null)
+            {
+                logger.Error("Could not find PlayOnline installation.");
+                return;
+            }
+
+            var loginDir = new DirectoryInfo(Path.Combine(polPath.FullName, "usr", "all"));
+            var loginFile = new FileInfo(Path.Combine(loginDir.FullName, "login_w.bin"));
+
+            if (!loginFile.Exists)
+            {
+                logger.Error("Could not find a valid login_w.bin to compare against.");
+                return;
+            }
+
+            var profilesDir = new DirectoryInfo(Path.Combine(appDirectory.FullName, "profiles", locale));
+            var profileFiles = profilesDir.EnumerateFiles("login_w_*.bin");
+            //Console.WriteLine("Examining folder: {0}", profilesDir.FullName);
+            foreach (var profileFile in profileFiles)
+            {
+                //Console.WriteLine("Examining file: {0}", profileFile.FullName);
+                if(this.AreFilesIdentical(loginFile, profileFile))
+                {
+                    this.logger.Log("Found! The active PlayOnline{0} profile was sourced from: ", locale);
+                    this.logger.Log("  [{0}]", profileFile.FullName);
+                    return;
+                }
+            }
+
+            this.logger.Log(" **The active PlayOnline{0} profile does not match any of your saved profiles!", locale);
+        }
+
         /// <summary>
         /// These are all the possible registry paths for PlayOnline installations. It covers
         /// 32-bit and 64-bit Windows, as well as the US, JP, and EU versions.
@@ -323,7 +381,7 @@ namespace WindowerLauncher
             @"SOFTWARE\PlayOnlineEU\InstallFolder",
         };
 
-        private void CreateProfileShortcut(string profileName, string profileLocale, int leave)
+        private void CreateProfileShortcut(string profileName, string profileLocale, int leave, int count)
         {
             WshShell wsh = new WshShell();
 
@@ -334,7 +392,7 @@ namespace WindowerLauncher
                 //new FileInfo(Path.Combine(appDirectory.FullName, "profiles", shortcutName))
             };
 
-            var args = $"run -name:\"{profileName}\" -locale:{profileLocale} -leave:{leave}";
+            var args = $"run -name:\"{profileName}\" -locale:{profileLocale} -leave:{leave} -count:{count}";
 
             foreach (var shortcutFile in shortcutFiles)
             {
@@ -377,9 +435,17 @@ namespace WindowerLauncher
 
         }
 
-        private void RunWindower()
+        private void RunWindower(int instance = 0)
         {
-            logger.Log("Launching Windower...");
+            if (instance > 0)
+            {
+                logger.Log("Launching Windower instance #{0}...", instance + 1);
+            }
+            else
+            {
+                logger.Log("Launching Windower...");
+            }
+
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = Path.Combine(this.appDirectory.FullName, "..", "Windower.exe"),
@@ -442,7 +508,7 @@ namespace WindowerLauncher
                                     var di = new DirectoryInfo(polPath);
                                     if (di.Exists)
                                     {
-                                        logger.Log($"Found PlayOnline{currentLocale} install:\n    {di.FullName}\n");
+                                        logger.Log($"Found PlayOnline{currentLocale} install:\n  [{di.FullName}]\n");
                                         locale = currentLocale;
                                         return di;
                                     }

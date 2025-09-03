@@ -13,15 +13,13 @@ namespace WindowerLauncher
     {
         static void Main(string[] args)
         {
-            
-
             // If no arguments were provided, we'll run as a command line application.
             if (args.Length == 0)
             {
                 var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = "/K title WindowerLauncher Command Prompt",
+                    Arguments = "/C DOSKEY wl=WindowerLauncher.exe $* && cmd.exe /K title WindowerLauncher Command Prompt",
                     UseShellExecute = false,
                     WorkingDirectory = new FileInfo(Assembly.GetExecutingAssembly().Location).Directory.FullName,
                 });
