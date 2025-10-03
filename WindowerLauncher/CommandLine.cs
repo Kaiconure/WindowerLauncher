@@ -95,6 +95,9 @@ namespace WindowerLauncher
         Activate,
         Id,
         Ident,
-        Identify
+        Identify,
+        Si,
+        SysInfo,
+        SystemInfo,
     }
 }

@@ -18,16 +18,22 @@ Check out the WindowerLauncher wiki for information and instructions. Here are s
 - [Introduction to WindowerLauncher](https://github.com/Kaiconure/WindowerLauncher/wiki)
 
 **Quick Start**
+
 - [Walk-through: Six-account setup](https://github.com/Kaiconure/WindowerLauncher/wiki/Six-Account-Setup)
 - [Command line cheat sheet](https://github.com/Kaiconure/WindowerLauncher/wiki/Command-line-cheat-sheet)
   
+
 **General Setup**
 
 *If you didn't follow the quick-start guide, or are curious about the individual steps:*
+
 - Step 1: [Download and Installation](https://github.com/Kaiconure/WindowerLauncher/wiki/Installation-Guide)
 - Step 2: [Saving your profile](https://github.com/Kaiconure/WindowerLauncher/wiki/Saving-your-profile)
 - Step 3: [Creating and saving secondary profiles](https://github.com/Kaiconure/WindowerLauncher/wiki/Creating-new-profiles)
 
+**Advanced Settings**
+
+- [Processor Affinity for Multiboxers](https://github.com/Kaiconure/WindowerLauncher/wiki/Processor-Affinity-for-Multiboxers)
 
 ## FAQ
 

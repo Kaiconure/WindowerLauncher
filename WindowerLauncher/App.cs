@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Management;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,10 +16,36 @@ namespace WindowerLauncher
 {
     internal class App
     {
+        private const string WindowerExecutable = "Windower.exe";
+
         private readonly CommandLine commands;
         private readonly Logger logger = Logger.Instance;
         private readonly FileInfo appFile;
         private readonly DirectoryInfo appDirectory;
+
+        public static readonly int ProcessorLogicalCores;
+        public static readonly int ProcessorPhysicalCores;
+
+        static App()
+        {
+            App.ProcessorLogicalCores = Environment.ProcessorCount;
+
+            try
+            {
+                var numCores = 0;
+                var searcher = new ManagementObjectSearcher("SELECT NumberOfCores FROM Win32_Processor");
+                foreach (var item in searcher.Get())
+                {
+                    numCores += Convert.ToInt32(item["NumberOfCores"]);
+                }
+
+                App.ProcessorPhysicalCores = numCores;
+            }
+            catch
+            {
+                App.ProcessorPhysicalCores = App.ProcessorLogicalCores;
+            }
+        }
 
         public App(CommandLine commands)
         {
@@ -83,6 +110,11 @@ namespace WindowerLauncher
                     case CommandType.Identify:
                         this.DoIdentify();
                         break;
+                    case CommandType.Si:
+                    case CommandType.SysInfo:
+                    case CommandType.SystemInfo:
+                        this.DoSysInfo();
+                        break;
                 }
             }
             catch (Exception ex)
@@ -114,6 +146,13 @@ namespace WindowerLauncher
             if (!hasName || string.IsNullOrWhiteSpace(name))
             {
                 logger.Error("You must specify a name for the login profile using -name:<name>.");
+                return;
+            }
+
+            var hasCore = this.commands.GetArgumentInt("core", out var core, 0);
+            if (hasCore && (core < 0 || core > 30))
+            {
+                logger.Error("Core values must be between 0-30, inclusive.");
                 return;
             }
 
@@ -156,10 +195,10 @@ namespace WindowerLauncher
             logger.Log("Saving desktop shortcut...");
             this.commands.GetArgumentInt("leave", out var leave, 10);
 
-            this.commands.GetArgumentInt("count", out var count, 1);
-            count = Math.Min(Math.Max(count, 1), 4);
+            var count = this.GetCountConfig();
+            var hasCoreConfig = this.GetCoreConfig(out var coreConfigs);
 
-            CreateProfileShortcut(name, locale, Math.Max(leave, 1), count);
+            CreateProfileShortcut(name, locale, Math.Max(leave, 1), count, coreConfigs);
         }
 
         private void DoNew()
@@ -213,8 +252,10 @@ namespace WindowerLauncher
             var hasName = this.commands.GetArgumentString("name", out var name);
             if (!hasName || string.IsNullOrWhiteSpace(name))
             {
-                logger.Error("You must specify a name for the login profile using -name:<name>.");
-                return;
+                hasName = false;
+                logger.Log("No name was specified, will proceed with the currently active profile.");
+                //logger.Error("You must specify a name for the login profile using -name:<name>.");
+                //return;
             }
 
             this.commands.GetArgumentString("locale", out var locale);
@@ -225,58 +266,61 @@ namespace WindowerLauncher
                 return;
             }
 
-            var windowerFile = new FileInfo(Path.Combine(appDirectory.FullName, "..", "Windower.exe"));
+            var windowerFile = new FileInfo(Path.Combine(appDirectory.FullName, "..", App.WindowerExecutable));
             if (!windowerFile.Exists)
             {
                 logger.Error("Could not find Windower executable: {0}", windowerFile.FullName);
                 return;
             }
 
-            var loginDir = new DirectoryInfo(Path.Combine(polPath.FullName, "usr", "all"));
-            var loginFile = new FileInfo(Path.Combine(loginDir.FullName, "login_w.bin"));
-            if (!loginFile.Exists)
+            if (hasName)
             {
-                logger.Error("Could not find PlayOnline login file: {0}", loginFile.FullName);
-                return;
-            }
-
-            var sourceFile = new FileInfo(Path.Combine(appDirectory.FullName, "profiles", locale, $"login_w_{name}.bin"));
-            if (!sourceFile.Exists)
-            {
-                logger.Error($"A login profile with the name '{name}' could not be found for the {locale} locale!");
-                return;
-            }
-
-            if (!this.AreFilesIdentical(loginFile, sourceFile))
-            {
-                var backupFile = new FileInfo(Path.Combine(loginDir.FullName, ".wlbackups", $"login_w_backup_{DateTime.Now.ToString("yyyyMMdd_HHmmss")}.bin"));
-                logger.Log($"Backing up current login profile to: {backupFile.FullName}");
-                if (!backupFile.Directory.Exists)
+                var loginDir = new DirectoryInfo(Path.Combine(polPath.FullName, "usr", "all"));
+                var loginFile = new FileInfo(Path.Combine(loginDir.FullName, "login_w.bin"));
+                if (!loginFile.Exists)
                 {
-                    backupFile.Directory.Create();
+                    logger.Error("Could not find PlayOnline login file: {0}", loginFile.FullName);
+                    return;
                 }
-                loginFile.CopyTo(backupFile.FullName, true);
 
-                // Perform a minification step after saving the current backup
-                this.DoMinify();
+                var sourceFile = new FileInfo(Path.Combine(appDirectory.FullName, "profiles", locale, $"login_w_{name}.bin"));
+                if (!sourceFile.Exists)
+                {
+                    logger.Error($"A login profile with the name '{name}' could not be found for the {locale} locale!");
+                    return;
+                }
 
-                logger.Log($"Activating profile: {name}");
-                sourceFile.CopyTo(loginFile.FullName, true);
-            }
-            else
-            {
-                logger.Log($"Profile '{name}' is already active, no changes were made. Proceeding...");
+                if (!this.AreFilesIdentical(loginFile, sourceFile))
+                {
+                    var backupFile = new FileInfo(Path.Combine(loginDir.FullName, ".wlbackups", $"login_w_backup_{DateTime.Now.ToString("yyyyMMdd_HHmmss")}.bin"));
+                    logger.Log($"Backing up current login profile to: {backupFile.FullName}");
+                    if (!backupFile.Directory.Exists)
+                    {
+                        backupFile.Directory.Create();
+                    }
+                    loginFile.CopyTo(backupFile.FullName, true);
+
+                    // Perform a minification step after saving the current backup
+                    this.DoMinify();
+
+                    logger.Log($"Activating profile: {name}");
+                    sourceFile.CopyTo(loginFile.FullName, true);
+                }
+                else
+                {
+                    logger.Log($"Profile '{name}' is already active, no changes were made. Proceeding...");
+                }
             }
 
             // Launch windower, unless we're running in "Activate" mode (set up but don't launch)
             if (this.commands.Type != CommandType.Activate)
             {
-                this.commands.GetArgumentInt("count", out var count, 1);
-                count = Math.Min(Math.Max(count, 1), 4);
+                var count = this.GetCountConfig();
+                var hasCoreConfig = this.GetCoreConfig(out var coreConfigs);
 
                 for (var i = 0; i < count; i++)
                 {
-                    this.RunWindower(i);
+                    this.RunWindower(i, hasCoreConfig ? coreConfigs[i] : null);
                 }
             }
         }
@@ -367,6 +411,13 @@ namespace WindowerLauncher
             this.logger.Log(" **The active PlayOnline{0} profile does not match any of your saved profiles!", locale);
         }
 
+        private void DoSysInfo()
+        {
+            this.logger.Log("System Information:");
+            this.logger.Log("   Logical cores:  {0}", App.ProcessorLogicalCores);
+            this.logger.Log("   Physical cores: {0}", App.ProcessorPhysicalCores);
+        }
+
         /// <summary>
         /// These are all the possible registry paths for PlayOnline installations. It covers
         /// 32-bit and 64-bit Windows, as well as the US, JP, and EU versions.
@@ -381,7 +432,7 @@ namespace WindowerLauncher
             @"SOFTWARE\PlayOnlineEU\InstallFolder",
         };
 
-        private void CreateProfileShortcut(string profileName, string profileLocale, int leave, int count)
+        private void CreateProfileShortcut(string profileName, string profileLocale, int leave, int count, CoreConfig[] coreConfigs = null)
         {
             WshShell wsh = new WshShell();
 
@@ -389,10 +440,14 @@ namespace WindowerLauncher
             var shortcutFiles = new FileInfo[]
             {
                 new FileInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), shortcutName + ".lnk")),
-                //new FileInfo(Path.Combine(appDirectory.FullName, "profiles", shortcutName))
             };
 
             var args = $"run -name:\"{profileName}\" -locale:{profileLocale} -leave:{leave} -count:{count}";
+
+            if(coreConfigs?.Any() == true)
+            {
+                args = args + $" -core:{coreConfigs[0].BaseCore} -ncore:{coreConfigs[0].Count}";
+            }
 
             foreach (var shortcutFile in shortcutFiles)
             {
@@ -432,10 +487,85 @@ namespace WindowerLauncher
                 $"PUSHD %~dp0",
                 $@"..\WindowerLauncher.exe {args}",
             });
-
         }
 
-        private void RunWindower(int instance = 0)
+        private class CoreConfig
+        {
+            public CoreConfig(int baseCore, int count)
+            {
+                this.BaseCore = baseCore;
+                this.Count = count;
+                this.Cores = new int[count];
+                this.AffinityMask = 0;
+
+                for(var i = 0; i < count; i++)
+                {
+                    this.Cores[i] = (baseCore + i) % App.ProcessorLogicalCores;
+                    AffinityMask |= (1 << this.Cores[i]);
+                }
+
+                this.BaseCore = this.Cores[0];
+            }
+
+            public override string ToString()
+            {
+                return this.ToString(null);
+            }
+
+            public string ToString(string label)
+            {
+                var sb = new StringBuilder();
+
+                sb.AppendLine($"{(string.IsNullOrWhiteSpace(label) ? "Instance" : label)} Core Configuration:");
+
+                sb.AppendLine($"  Assigned cores:  {string.Join(",", this.Cores)} ({this.Cores.Length} of {App.ProcessorLogicalCores})");
+                sb.AppendLine($"  Affinity mask:   {this.AffinityMask.ToString("X8")}");
+
+                return sb.ToString();
+            }
+
+            public int BaseCore;
+            public int Count;
+            public int[] Cores;
+            public int AffinityMask;
+        }
+
+        private int GetCountConfig()
+        {
+            this.commands.GetArgumentInt("count", out var count, 1);
+            return Math.Min(Math.Max(count, 1), 4);
+        }
+
+        private bool GetCoreConfig(out CoreConfig[] coreConfigs)
+        {
+            coreConfigs = null;
+
+            var instanceCount = this.GetCountConfig();
+
+            var hasConfig = this.commands.GetArgumentInt("core", out var baseCore);
+            if (hasConfig)
+            {
+                baseCore = Math.Min(Math.Max(baseCore, 0), 30);
+
+                this.commands.GetArgumentInt("ncore", out var coresPerInstance, 1);
+                coresPerInstance = Math.Max(coresPerInstance, 1);
+
+                this.logger.Log("");
+
+                coreConfigs = new CoreConfig[instanceCount];
+                for(var i = 0; i < instanceCount; i++)
+                {
+                    coreConfigs[i] = new CoreConfig(baseCore + (i * coresPerInstance), coresPerInstance);
+                    this.logger.Log(coreConfigs[i].ToString($"Instance #{i + 1}"));
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private void RunWindower(int instance = 0, CoreConfig coreConfig = null)
         {
             if (instance > 0)
             {
@@ -448,11 +578,26 @@ namespace WindowerLauncher
 
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = Path.Combine(this.appDirectory.FullName, "..", "Windower.exe"),
+                FileName = Path.Combine(this.appDirectory.FullName, "..", App.WindowerExecutable),
                 WorkingDirectory = this.appDirectory.Parent.FullName,
-                UseShellExecute = true,
+                UseShellExecute = false,
+                RedirectStandardError = false,
+                RedirectStandardOutput = false,
+                RedirectStandardInput = false,
+                CreateNoWindow = false
             };
-            var process = System.Diagnostics.Process.Start(startInfo);
+
+            using (var process = System.Diagnostics.Process.Start(startInfo))
+            {
+                if (coreConfig != null)
+                {
+                    process.WaitForInputIdle(5000);
+                    if (!process.HasExited)
+                    {
+                        process.ProcessorAffinity = (IntPtr)coreConfig.AffinityMask;
+                    }
+                }
+            }
         }
 
         private bool AreFilesIdentical(FileInfo f1, FileInfo f2)
