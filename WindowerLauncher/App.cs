@@ -2,6 +2,7 @@
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management;
@@ -114,6 +115,9 @@ namespace WindowerLauncher
                     case CommandType.SysInfo:
                     case CommandType.SystemInfo:
                         this.DoSysInfo();
+                        break;
+                    case CommandType.Affinitize:
+                        this.DoAffinitize();
                         break;
                 }
             }
@@ -418,6 +422,45 @@ namespace WindowerLauncher
             this.logger.Log("   Physical cores: {0}", App.ProcessorPhysicalCores);
         }
 
+        private void DoAffinitize()
+        {
+            var processes = Process.GetProcessesByName("pol")
+                .OrderBy(p => p.StartTime)
+                .ThenBy(p => p.Id)
+                .ToArray();
+            if(processes.Length == 0)
+            {
+                logger.Error("No running pol.exe processes were found.");
+                return;
+            }
+
+            if(!this.GetCoreConfig(out var coreConfigs, processes.Length, "PlayOnline #{0}"))
+            {
+                logger.Error("No valid core configuration settings were specified.");
+                return;
+            }
+
+            bool readOnly = this.commands.GetArgumentBool("readonly") || this.commands.GetArgumentBool("ro");
+
+            if (!readOnly)
+            {
+                bool force = this.commands.GetArgumentBool("force");
+                for (int i = 0; i < processes.Length; i++)
+                {
+                    var process = processes[i];
+                    var config = coreConfigs[i];
+                    if (force || process.ProcessorAffinity == IntPtr.Zero || process.ProcessorAffinity == (IntPtr)0x00ffffff)
+                    {
+                        process.ProcessorAffinity = (IntPtr)config.AffinityMask;
+                    }
+                    else
+                    {
+                        logger.Log("**WARNING: Process PID={0} already has an affinity. Use -force to override prior affinity settings.", process.Id);
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// These are all the possible registry paths for PlayOnline installations. It covers
         /// 32-bit and 64-bit Windows, as well as the US, JP, and EU versions.
@@ -530,17 +573,18 @@ namespace WindowerLauncher
             public int AffinityMask;
         }
 
-        private int GetCountConfig()
+        private int GetCountConfig(int? countOverride = null)
         {
             this.commands.GetArgumentInt("count", out var count, 1);
+
             return Math.Min(Math.Max(count, 1), 4);
         }
 
-        private bool GetCoreConfig(out CoreConfig[] coreConfigs)
+        private bool GetCoreConfig(out CoreConfig[] coreConfigs, int? countOverride = null, string label = null)
         {
             coreConfigs = null;
 
-            var instanceCount = this.GetCountConfig();
+            var instanceCount = countOverride.HasValue ? countOverride.Value : this.GetCountConfig(countOverride);
 
             var hasConfig = this.commands.GetArgumentInt("core", out var baseCore);
             if (hasConfig)
@@ -556,7 +600,9 @@ namespace WindowerLauncher
                 for(var i = 0; i < instanceCount; i++)
                 {
                     coreConfigs[i] = new CoreConfig(baseCore + (i * coresPerInstance), coresPerInstance);
-                    this.logger.Log(coreConfigs[i].ToString($"Instance #{i + 1}"));
+                    this.logger.Log(coreConfigs[i].ToString(
+                        string.Format(string.IsNullOrWhiteSpace(label) ? "Instance #{0}" : label, i + 1)
+                    ));
                 }
 
                 return true;

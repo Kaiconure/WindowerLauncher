@@ -99,5 +99,6 @@ namespace WindowerLauncher
         Si,
         SysInfo,
         SystemInfo,
+        Affinitize,
     }
 }
