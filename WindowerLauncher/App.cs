@@ -26,6 +26,7 @@ namespace WindowerLauncher
 
         public static readonly int ProcessorLogicalCores;
         public static readonly int ProcessorPhysicalCores;
+        public static readonly IntPtr AllAffinities;
 
         static App()
         {
@@ -45,6 +46,21 @@ namespace WindowerLauncher
             catch
             {
                 App.ProcessorPhysicalCores = App.ProcessorLogicalCores;
+            }
+
+            // Note: There's an issue with how .Net handles affinities in the Process class, in that
+            // it uses a 32-bit affinity mask. This means that any system with more than 32 virtual
+            // cores will not have the ability to detect and set all possible affinity modes.
+            //
+            // For now, we'll just have to accept that WindowerLauncher can only work with cores
+            // from 0-31 (32 core systems) and anything above that is out of range.
+            if(App.ProcessorLogicalCores >= 31)
+            {
+                App.AllAffinities = (IntPtr)((int)-1);
+            }
+            else
+            {
+                App.AllAffinities = (IntPtr)((1 << App.ProcessorLogicalCores) - 1);
             }
         }
 
@@ -449,7 +465,7 @@ namespace WindowerLauncher
                 {
                     var process = processes[i];
                     var config = coreConfigs[i];
-                    if (force || process.ProcessorAffinity == IntPtr.Zero || process.ProcessorAffinity == (IntPtr)0x00ffffff)
+                    if (force || process.ProcessorAffinity == IntPtr.Zero || process.ProcessorAffinity == App.AllAffinities)
                     {
                         process.ProcessorAffinity = (IntPtr)config.AffinityMask;
                     }
