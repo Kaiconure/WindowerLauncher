@@ -98,9 +98,11 @@ namespace WindowerLauncher
 
             try
             {
+                var version = Assembly.GetEntryAssembly().GetName().Version;
+
                 this.logger.Log("");
                 this.logger.Log(" ===========================================================");
-                this.logger.Log("  Welcome to WindowerLauncher v{0}!", Assembly.GetEntryAssembly().GetName().Version.ToString(3));
+                this.logger.Log("  Welcome to WindowerLauncher v{0}!", Assembly.GetEntryAssembly().GetName().Version);
                 this.logger.Log(" ===========================================================");
                 this.logger.Log("");
 
@@ -134,6 +136,8 @@ namespace WindowerLauncher
                         break;
                     case CommandType.Affinitize:
                         this.DoAffinitize();
+                        break;
+                    case CommandType.Version:
                         break;
                 }
             }

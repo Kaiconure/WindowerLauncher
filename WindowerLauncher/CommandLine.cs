@@ -100,5 +100,6 @@ namespace WindowerLauncher
         SysInfo,
         SystemInfo,
         Affinitize,
+        Version,
     }
 }
