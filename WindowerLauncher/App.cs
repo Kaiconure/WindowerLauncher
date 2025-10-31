@@ -238,8 +238,7 @@ namespace WindowerLauncher
             this.commands.GetArgumentInt("leave", out var leave, 10);
 
             var count = this.GetCountConfig();
-            var overlap = this.GetOverlapConfig(count);
-            var hasCoreConfig = this.GetCoreConfig(out var coreConfigs);
+            var hasCoreConfig = this.GetCoreConfig(out var coreConfigs, out var coresPerInstance, out var overlap);
 
             CreateProfileShortcut(name, locale, Math.Max(leave, 1), count, overlap, coreConfigs);
         }
@@ -885,7 +884,14 @@ namespace WindowerLauncher
 
         private bool GetCoreConfig(out CoreConfig[] coreConfigs, int? countOverride = null, string label = null)
         {
+            return this.GetCoreConfig(out coreConfigs, out var _, out var _, countOverride, label);
+        }
+
+        private bool GetCoreConfig(out CoreConfig[] coreConfigs, out int coresPerInstance, out int overlap, int? countOverride = null, string label = null)
+        {
             coreConfigs = null;
+            coresPerInstance = 0;
+            overlap = 0;
 
             var instanceCount = countOverride.HasValue ? countOverride.Value : this.GetCountConfig(countOverride);
 
@@ -894,10 +900,10 @@ namespace WindowerLauncher
             {
                 baseCore = Math.Min(Math.Max(baseCore, 0), 30);
 
-                this.commands.GetArgumentInt("ncore", out var coresPerInstance, 1);
+                this.commands.GetArgumentInt("ncore", out coresPerInstance, 1);
                 coresPerInstance = Math.Max(coresPerInstance, 1);
 
-                var overlap = this.GetOverlapConfig(coresPerInstance);
+                overlap = this.GetOverlapConfig(coresPerInstance);
 
                 this.logger.Log("");
 
