@@ -116,5 +116,10 @@ namespace WindowerLauncher
         
         CoreMap,
         Cm,
+
+        Uptime,
+        Ut,
+
+        Kill,
     }
 }

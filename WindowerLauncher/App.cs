@@ -145,6 +145,13 @@ namespace WindowerLauncher
                     case CommandType.Cm:
                         this.DoCoreMap();
                         break;
+                    case CommandType.Uptime:
+                    case CommandType.Ut:
+                        this.DoUptime();
+                        break;
+                    case CommandType.Kill:
+                        this.DoKill();
+                        break;
                     case CommandType.Version:
                         break;
                 }
@@ -162,12 +169,15 @@ namespace WindowerLauncher
             Console.WriteLine("No command specified.");
             Console.WriteLine("Usage: WindowerLauncher <command> [options]");
             Console.WriteLine("Commands:");
-            Console.WriteLine("  save       Save your current login configuration.");
+            Console.WriteLine("  activate   Sets up a profile but does not run it (same as run, but Windower is not launched).");
+            Console.WriteLine("  affinitize Sets the processor affinity for all active pol.exe instances.");
+            Console.WriteLine("  laa        View or configure Large Address Awareness (LAA) for pol.exe.");
+            Console.WriteLine("  kill       Kills the pol.exe process associated with a specific toon. Should only be used when things are misbehaving!");
             Console.WriteLine("  new        Creates a new, blank profile.");
             Console.WriteLine("  run        Run Windower using the specified profile.");
-            Console.WriteLine("  activate   Sets up a profile but does not run it (same as run, but Windower is not launched).");
-            Console.WriteLine("  id         Tries to identify the profile that matches the current PlayOnline login_w.bin file.");
-            Console.WriteLine("  minify     Remove old backups.");
+            Console.WriteLine("  save       Save your current login configuration. Be sure the profile you want to save is active first!");
+            Console.WriteLine("  si         View some helpful system information.");
+            Console.WriteLine("  uptime     Find all running pol.exe instances and identify their associated toon and total process uptime.");
         }
 
         private void DoSave()
@@ -228,9 +238,10 @@ namespace WindowerLauncher
             this.commands.GetArgumentInt("leave", out var leave, 10);
 
             var count = this.GetCountConfig();
+            var overlap = this.GetOverlapConfig(count);
             var hasCoreConfig = this.GetCoreConfig(out var coreConfigs);
 
-            CreateProfileShortcut(name, locale, Math.Max(leave, 1), count, coreConfigs);
+            CreateProfileShortcut(name, locale, Math.Max(leave, 1), count, overlap, coreConfigs);
         }
 
         private void DoNew()
@@ -457,6 +468,75 @@ namespace WindowerLauncher
             this.logger.Log("   Physical cores: {0}", App.ProcessorPhysicalCores);
         }
 
+        private void DoKill()
+        {
+            if (!this.commands.GetArgumentString("name", out var name))
+            {
+                logger.Warn("No toon name was specified to kill.");
+                return;
+            }
+
+            var processes = Process.GetProcessesByName("pol")
+                .Where(p => !string.IsNullOrWhiteSpace(p.MainWindowTitle) && string.Equals(p.MainWindowTitle, name, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (!processes.Any())
+            {
+                logger.Warn("No matching processes were found.");
+                return;
+            }
+
+            if (processes.Length == 1)
+            {
+                logger.Log($"Found 1 matching process to kill!");
+            }
+            else
+            {
+                logger.Log($"Found {processes.Length} matching processes to kill!");
+            }
+            logger.Log("");
+
+            foreach(var process in processes)
+            {
+                try
+                {
+                    logger.Log($"Attempting to kill proces {process.Id}...");
+                    process.Kill();
+                    logger.Log("   The process was successfully killed!");
+                }
+                catch (Exception e)
+                {
+                    logger.Error($"Failed to kill process {process.Id}: {e.Message}");
+                }
+            }
+        }
+
+        private void DoUptime()
+        {
+            var processes = Process.GetProcessesByName("pol")
+                .OrderBy(p => p.StartTime)
+                .ThenBy(p => p.Id)
+                .ToArray();
+
+            if (processes.Length == 0)
+            {
+                logger.Warn("No running pol.exe processes were found.");
+                return;
+            }
+
+            var reftime = DateTime.Now;
+            int i = 1;
+            foreach (var process in processes)
+            {
+                var runtime = reftime.Subtract(process.StartTime);
+                var title = string.IsNullOrWhiteSpace(process.MainWindowTitle) ? "<<Unknown>>" : process.MainWindowTitle.Trim();
+                logger.Log($"{i}. Process Id {process.Id}: {title}");
+                logger.Log($"      Started:  {process.StartTime:yyyy-MM-dd HH:mm:ss.fff}");
+                logger.Log($"      Uptime:   {(int)runtime.Days:N0} days, {(int)runtime.Hours:D2}h{(int)runtime.Minutes:D2}m{(int)runtime.Seconds:D2}s");
+
+                i++;
+            }
+        }
+
         private void DoAffinitize()
         {
             var processes = Process.GetProcessesByName("pol")
@@ -674,7 +754,7 @@ namespace WindowerLauncher
             @"SOFTWARE\PlayOnlineEU\InstallFolder",
         };
 
-        private void CreateProfileShortcut(string profileName, string profileLocale, int leave, int count, CoreConfig[] coreConfigs = null)
+        private void CreateProfileShortcut(string profileName, string profileLocale, int leave, int count, int overlap, CoreConfig[] coreConfigs = null)
         {
             WshShell wsh = new WshShell();
 
@@ -684,7 +764,7 @@ namespace WindowerLauncher
                 new FileInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), shortcutName + ".lnk")),
             };
 
-            var args = $"run -name:\"{profileName}\" -locale:{profileLocale} -leave:{leave} -count:{count}";
+            var args = $"run -name:\"{profileName}\" -locale:{profileLocale} -leave:{leave} -count:{count} -overlap:{overlap}";
 
             if(coreConfigs?.Any() == true)
             {
@@ -774,9 +854,33 @@ namespace WindowerLauncher
 
         private int GetCountConfig(int? countOverride = null)
         {
-            this.commands.GetArgumentInt("count", out var count, 1);
+            int count = 0;
+            if (countOverride.HasValue)
+            {
+                count = countOverride.Value;
+            }
+            else
+            {
+                this.commands.GetArgumentInt("count", out count, 1);
+            }
 
             return Math.Min(Math.Max(count, 1), 4);
+        }
+
+        private int GetOverlapConfig(int coresPerInstance, int? overlapOverride = null)
+        {
+            int overlap = 0;
+            if (overlapOverride.HasValue)
+            {
+                overlap = overlapOverride.Value;
+            }
+            else
+            {
+                this.commands.GetArgumentInt("overlap", out overlap, 0);
+            }
+
+            // Validate the core overlap. It must be between 0 and one less than the core count per instance.
+            return Math.Min(Math.Max(overlap, 0), coresPerInstance - 1);
         }
 
         private bool GetCoreConfig(out CoreConfig[] coreConfigs, int? countOverride = null, string label = null)
@@ -793,9 +897,7 @@ namespace WindowerLauncher
                 this.commands.GetArgumentInt("ncore", out var coresPerInstance, 1);
                 coresPerInstance = Math.Max(coresPerInstance, 1);
 
-                // Find the core overlap. This must be between 0 and one less than the core count
-                this.commands.GetArgumentInt("overlap", out var overlap, 0);
-                overlap = Math.Min(Math.Max(overlap, 0), coresPerInstance - 1);
+                var overlap = this.GetOverlapConfig(coresPerInstance);
 
                 this.logger.Log("");
 
