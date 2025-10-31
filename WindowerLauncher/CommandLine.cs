@@ -88,18 +88,33 @@ namespace WindowerLauncher
     public enum CommandType
     {
         None,
+        
         Save,
+        
         Run,
+        
         Minify,
+        
         New,
+        
         Activate,
+        
         Id,
         Ident,
         Identify,
+        
         Si,
         SysInfo,
         SystemInfo,
+        
         Affinitize,
+        
         Version,
+        
+        LargeAddressAware,
+        Laa,
+        
+        CoreMap,
+        Cm,
     }
 }

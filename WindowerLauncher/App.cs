@@ -137,6 +137,14 @@ namespace WindowerLauncher
                     case CommandType.Affinitize:
                         this.DoAffinitize();
                         break;
+                    case CommandType.LargeAddressAware:
+                    case CommandType.Laa:
+                        this.DoLargeAddressAware();
+                        break;
+                    case CommandType.CoreMap:
+                    case CommandType.Cm:
+                        this.DoCoreMap();
+                        break;
                     case CommandType.Version:
                         break;
                 }
@@ -342,6 +350,13 @@ namespace WindowerLauncher
                 var count = this.GetCountConfig();
                 var hasCoreConfig = this.GetCoreConfig(out var coreConfigs);
 
+                var polExe = new FileInfo(Path.Combine(polPath.FullName, "pol.exe"));
+                if(this.TryGetIsLargeAddressAware(polExe, out var isLaa))
+                {
+                    logger.Log("Large address awareness is {0} for: ", isLaa ? "ON" : "OFF");
+                    logger.Log("  {0}{1}", polExe.FullName, Environment.NewLine);
+                }
+
                 for (var i = 0; i < count; i++)
                 {
                     this.RunWindower(i, hasCoreConfig ? coreConfigs[i] : null);
@@ -481,6 +496,170 @@ namespace WindowerLauncher
             }
         }
 
+        private void DoLargeAddressAware()
+        {
+            this.commands.GetArgumentString("locale", out var locale);
+            var polPath = GetPolPath(ref locale);
+            if (polPath == null)
+            {
+                logger.Error("Could not find PlayOnline installation.");
+                return;
+            }
+
+            var polExe = new FileInfo(Path.Combine(polPath.FullName, "pol.exe"));
+            if (!polExe.Exists)
+            {
+                logger.Error("The pol.exe file could not be found.");
+                return;
+            }
+
+            if (commands.GetArgumentString("set", out var value))
+            {
+                var toggleOn = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+                var toggleOff = string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(value, "off", StringComparison.OrdinalIgnoreCase);
+
+                if (toggleOn)
+                {
+                    this.UpdateLargeAddressAware(polExe, true);
+                }
+                else if (toggleOff)
+                {
+                    this.UpdateLargeAddressAware(polExe, false);
+                }
+            }
+
+            if (this.TryGetIsLargeAddressAware(polExe, out var isLaa))
+            {
+                logger.Log("Large address awareness is {0} for: ", isLaa ? "ON" : "OFF");
+                logger.Log("  {0}", polExe.FullName);
+            }
+        }
+
+        private void DoCoreMap()
+        {
+            if(!this.GetCoreConfig(out var configs, null, "Sample Core Map #{0}"))
+            {
+                logger.Warn("No core configuration was specified to map.");
+            }
+        }
+
+        private const ushort PE_LAA_FLAG = 0x20;
+
+        private bool TryGetIsLargeAddressAware(FileInfo polExe, out bool isLaa)
+        {
+            isLaa = false;
+
+            try
+            {
+                if (polExe?.Exists != true)
+                {
+                    logger.Error("The pol.exe file could not be found.");
+                    return false;
+                }
+
+                isLaa = this.IsLargeAddressAware(polExe);
+                return true;
+            }
+            catch(Exception e)
+            {
+                logger.Error("Failed to read large address aware information: {0}", e.Message);
+                return false;
+            }
+        }
+
+        private bool IsLargeAddressAware(FileInfo polExe)
+        {
+            using (var stream = new FileStream(polExe.FullName, FileMode.Open, FileAccess.Read))
+            {
+                using (var reader = new BinaryReader(stream))
+                {
+                    // Read the MZ signature to verify this is a valid executable
+                    if (reader.ReadUInt16() != 0x5A4D)
+                    {
+                        throw new Exception("An invalid MZ signature was detected.");
+                    }
+
+                    // The location of the portable executable header is stored as a
+                    // 32-bit integer value at file offset 0x3C.
+                    reader.BaseStream.Position = 0x3C;
+                    int portableExecutableHeaderOffset = reader.ReadInt32();
+
+                    // Read the portable executable header signature, a 32-bit unsigned
+                    // integer value in the first four bytes of our PE header offset.
+                    reader.BaseStream.Position = portableExecutableHeaderOffset;
+                    if (reader.ReadUInt32() != 0x00004550)
+                    {
+                        throw new Exception("An invalid portable executable header signature was detected.");
+                    }
+
+                    // File characteristics are stored 18 bytes past the PE header signature
+                    reader.BaseStream.Position += 18;
+
+                    ushort flags = reader.ReadUInt16();
+
+                    return (flags & PE_LAA_FLAG) == PE_LAA_FLAG;
+                }
+            }
+        }
+
+        private bool UpdateLargeAddressAware(FileInfo polExe, bool enable)
+        {
+            try
+            {
+                using (var stream = new FileStream(polExe.FullName, FileMode.Open, FileAccess.ReadWrite))
+                {
+                    using (var reader = new BinaryReader(stream))
+                    {
+                        // Read the MZ signature to verify this is a valid executable
+                        if (reader.ReadUInt16() != 0x5A4D)
+                        {
+                            return false;
+                        }
+
+                        // The location of the portable executable header is stored as a
+                        // 32-bit integer value at file offset 0x3C.
+                        reader.BaseStream.Position = 0x3C;
+                        int portableExecutableHeaderOffset = reader.ReadInt32();
+
+                        // Read the portable executable header signature, a 32-bit unsigned
+                        // integer value in the first four bytes of our PE header offset.
+                        reader.BaseStream.Position = portableExecutableHeaderOffset;
+                        if (reader.ReadUInt32() != 0x00004550)
+                        {
+                            return false;
+                        }
+
+                        // Flags are stored 18 bytes past the PE header signature
+                        var flagsPosition = reader.BaseStream.Position + 18;
+                        reader.BaseStream.Position = flagsPosition;
+
+                        var flags = reader.ReadUInt16();
+                        
+                        if(enable)
+                        {
+                            flags = (ushort)(flags | PE_LAA_FLAG);
+                        }
+                        else
+                        {
+                            flags = (ushort)(flags & ~PE_LAA_FLAG);
+                        }
+
+                        reader.BaseStream.Position = flagsPosition;
+                        reader.BaseStream.Write(BitConverter.GetBytes(flags), 0, 2);
+                    }
+                }
+
+                return true;
+            }
+            catch(Exception e)
+            {
+                logger.Error("Failed to update LAA header: {0}{1}", e.Message, Environment.NewLine);
+                return false;
+            }
+        }
+
         /// <summary>
         /// These are all the possible registry paths for PlayOnline installations. It covers
         /// 32-bit and 64-bit Windows, as well as the US, JP, and EU versions.
@@ -614,16 +793,50 @@ namespace WindowerLauncher
                 this.commands.GetArgumentInt("ncore", out var coresPerInstance, 1);
                 coresPerInstance = Math.Max(coresPerInstance, 1);
 
+                // Find the core overlap. This must be between 0 and one less than the core count
+                this.commands.GetArgumentInt("overlap", out var overlap, 0);
+                overlap = Math.Min(Math.Max(overlap, 0), coresPerInstance - 1);
+
                 this.logger.Log("");
+
+                var assignedCores = new Dictionary<int, int>();
 
                 coreConfigs = new CoreConfig[instanceCount];
                 for(var i = 0; i < instanceCount; i++)
                 {
-                    coreConfigs[i] = new CoreConfig(baseCore + (i * coresPerInstance), coresPerInstance);
+                    var core = baseCore + (i * coresPerInstance) - (i * overlap);
+
+                    for(var j = 0; j < coresPerInstance; j++)
+                    {
+                        var key = (core + j) % App.ProcessorLogicalCores;
+                        if (!assignedCores.ContainsKey(key))
+                        {
+                            assignedCores[key] = 1;
+                        }
+                        else
+                        {
+                            assignedCores[key]++;
+                        }
+                    }
+
+                    coreConfigs[i] = new CoreConfig(core, coresPerInstance);
                     this.logger.Log(coreConfigs[i].ToString(
                         string.Format(string.IsNullOrWhiteSpace(label) ? "Instance #{0}" : label, i + 1)
                     ));
                 }
+
+                this.logger.Log("You have allocated a total of {0:N0} core(s)!", assignedCores.Count);
+
+                if (commands.GetArgumentBool("verbose"))
+                {
+                    this.logger.Log("");
+                    this.logger.Log("Core allocations:", assignedCores.Count);
+                    this.logger.Log("{0}",
+                        string.Join("\n", assignedCores.Keys.OrderBy(k => k).Select(k => $"  -Core #{k} x{assignedCores[k]:N0}"))
+                    );
+                }
+
+                this.logger.Log("");
 
                 return true;
             }

@@ -29,6 +29,11 @@ namespace WindowerLauncher
             this.Error(ex.ToString());
         }
 
+        public void Warn(string format, params object[] args)
+        {
+            this.Log($"**WARNING: {string.Format(format, args)}");
+        }
+
         public void Error(string format, params object[] args)
         {
             this.Log($"**ERROR: {string.Format(format, args)}");
