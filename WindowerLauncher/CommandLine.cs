@@ -90,6 +90,9 @@ namespace WindowerLauncher
         None,
         
         Save,
+
+        SaveBin,
+        Sb,
         
         Run,
         

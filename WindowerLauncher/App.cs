@@ -18,11 +18,14 @@ namespace WindowerLauncher
     internal class App
     {
         private const string WindowerExecutable = "Windower.exe";
+        private const int DefaultInstanceLimit = 4;
 
         private readonly CommandLine commands;
         private readonly Logger logger = Logger.Instance;
         private readonly FileInfo appFile;
         private readonly DirectoryInfo appDirectory;
+
+        private int instanceLimit = DefaultInstanceLimit;
 
         public static readonly int ProcessorLogicalCores;
         public static readonly int ProcessorPhysicalCores;
@@ -117,6 +120,10 @@ namespace WindowerLauncher
                     case CommandType.Save:
                         this.DoSave();
                         break;
+                    case CommandType.SaveBin:
+                    case CommandType.Sb:
+                        this.DoSaveBin();
+                        break;
                     case CommandType.Run:
                     case CommandType.Activate:
                         this.DoRun();
@@ -176,8 +183,59 @@ namespace WindowerLauncher
             Console.WriteLine("  new        Creates a new, blank profile.");
             Console.WriteLine("  run        Run Windower using the specified profile.");
             Console.WriteLine("  save       Save your current login configuration. Be sure the profile you want to save is active first!");
+            Console.WriteLine("  savebin    Save just the POL bin file for your profile, without creating/updating shortcuts.");
             Console.WriteLine("  si         View some helpful system information.");
             Console.WriteLine("  uptime     Find all running pol.exe instances and identify their associated toon and total process uptime.");
+        }
+
+        private void DoSaveBin()
+        {
+            var hasName = this.commands.GetArgumentString("name", out var name);
+            var force = this.commands.GetArgumentBool("force");
+
+            if (!hasName || string.IsNullOrWhiteSpace(name))
+            {
+                logger.Error("You must specify a name for the login profile using -name:<name>.");
+                return;
+            }
+
+            this.commands.GetArgumentString("locale", out var locale);
+            var polPath = GetPolPath(ref locale);
+            if (polPath == null)
+            {
+                logger.Error("Could not find PlayOnline installation.");
+                return;
+            }
+
+            var loginDir = new DirectoryInfo(Path.Combine(polPath.FullName, "usr", "all"));
+            var loginFile = new FileInfo(Path.Combine(loginDir.FullName, "login_w.bin"));
+            if (!loginFile.Exists)
+            {
+                logger.Error("Could not find PlayOnline login file: {0}", loginFile.FullName);
+                return;
+            }
+
+            var targetFile = new FileInfo(Path.Combine(appDirectory.FullName, "profiles", locale, $"login_w_{name}.bin"));
+            if (targetFile.Exists && !force)
+            {
+                logger.Error($"A login profile with the name '{name}' already exists. Use -force to overwrite.");
+                return;
+            }
+
+            if (!targetFile.Directory.Exists)
+            {
+                targetFile.Directory.Create();
+            }
+
+            logger.Log($"Saving your current profile as '{name}'...");
+            var fi = loginFile.CopyTo(targetFile.FullName, true);
+            if (!fi.Exists)
+            {
+                logger.Error($"Failed to save login profile for '{name}'.");
+                return;
+            }
+
+            logger.Log($"The bin file for profile '{name}' has been saved!");
         }
 
         private void DoSave()
@@ -538,40 +596,61 @@ namespace WindowerLauncher
 
         private void DoAffinitize()
         {
-            var processes = Process.GetProcessesByName("pol")
-                .OrderBy(p => p.StartTime)
-                .ThenBy(p => p.Id)
-                .ToArray();
-            if(processes.Length == 0)
-            {
-                logger.Error("No running pol.exe processes were found.");
-                return;
-            }
+            int originalInstanceLimit = this.instanceLimit;
 
-            if(!this.GetCoreConfig(out var coreConfigs, processes.Length, "PlayOnline #{0}"))
+            try
             {
-                logger.Error("No valid core configuration settings were specified.");
-                return;
-            }
+                this.instanceLimit = int.MaxValue;
 
-            bool readOnly = this.commands.GetArgumentBool("readonly") || this.commands.GetArgumentBool("ro");
-
-            if (!readOnly)
-            {
-                bool force = this.commands.GetArgumentBool("force");
-                for (int i = 0; i < processes.Length; i++)
+                var processes = Process.GetProcessesByName("pol")
+                    .OrderBy(p => p.StartTime)
+                    .ThenBy(p => p.Id)
+                    .ToArray();
+                if (processes.Length == 0)
                 {
-                    var process = processes[i];
-                    var config = coreConfigs[i];
-                    if (force || process.ProcessorAffinity == IntPtr.Zero || process.ProcessorAffinity == App.AllAffinities)
+                    logger.Error("No running pol.exe processes were found.");
+                    return;
+                }
+
+                bool readOnly = this.commands.GetArgumentBool("readonly") || this.commands.GetArgumentBool("ro");
+
+                if (!this.GetCoreConfig(out var coreConfigs, processes.Length, getLabel: (i) =>
+                {
+                    return $"PlayOnline #{i+1} / PID={processes[i].Id} ({processes[i].MainWindowTitle ?? "n/a"})";
+                }))
+                {
+                    logger.Error("No valid core configuration settings were specified.");
+                    return;
+                }
+
+                
+
+                if (!readOnly)
+                {
+                    bool force = this.commands.GetArgumentBool("force");
+                    for (int i = 0; i < processes.Length; i++)
                     {
-                        process.ProcessorAffinity = (IntPtr)config.AffinityMask;
-                    }
-                    else
-                    {
-                        logger.Log("**WARNING: Process PID={0} already has an affinity. Use -force to override prior affinity settings.", process.Id);
+                        var process = processes[i];
+                        var config = coreConfigs[i];
+                        if (force || process.ProcessorAffinity == IntPtr.Zero || process.ProcessorAffinity == App.AllAffinities)
+                        {
+                            process.ProcessorAffinity = (IntPtr)config.AffinityMask;
+                            logger.Log("**Process PID={0} ({1}) has been updated.", process.Id, process.MainWindowTitle ?? "n/a");
+                        }
+                        else
+                        {
+                            logger.Log("**WARNING: Process PID={0} already has an affinity. Use -force to override prior affinity settings.", process.Id);
+                        }
                     }
                 }
+                else
+                {
+                    logger.Log("**Running in READONLY mode. No affinities will be modified.");
+                }
+            }
+            finally
+            {
+                this.instanceLimit = originalInstanceLimit;
             }
         }
 
@@ -618,9 +697,20 @@ namespace WindowerLauncher
 
         private void DoCoreMap()
         {
-            if(!this.GetCoreConfig(out var configs, null, "Sample Core Map #{0}"))
+            var originalInstanceLimit = this.instanceLimit;
+
+            try
             {
-                logger.Warn("No core configuration was specified to map.");
+                this.instanceLimit = int.MaxValue;
+
+                if (!this.GetCoreConfig(out var configs, null, "Sample Core Map #{0}"))
+                {
+                    logger.Warn("No core configuration was specified to map.");
+                }
+            }
+            finally
+            {
+                this.instanceLimit = originalInstanceLimit;
             }
         }
 
@@ -837,6 +927,11 @@ namespace WindowerLauncher
             {
                 var sb = new StringBuilder();
 
+                if(string.IsNullOrWhiteSpace(label))
+                {
+                    label = this.Label;
+                }
+
                 sb.AppendLine($"{(string.IsNullOrWhiteSpace(label) ? "Instance" : label)} Core Configuration:");
 
                 sb.AppendLine($"  Assigned cores:  {string.Join(",", this.Cores)} ({this.Cores.Length} of {App.ProcessorLogicalCores})");
@@ -849,6 +944,7 @@ namespace WindowerLauncher
             public int Count;
             public int[] Cores;
             public int AffinityMask;
+            public string Label;
         }
 
         private int GetCountConfig(int? countOverride = null)
@@ -863,7 +959,7 @@ namespace WindowerLauncher
                 this.commands.GetArgumentInt("count", out count, 1);
             }
 
-            return Math.Min(Math.Max(count, 1), 4);
+            return Math.Min(Math.Max(count, 1), this.instanceLimit);
         }
 
         private int GetOverlapConfig(int coresPerInstance, int? overlapOverride = null)
@@ -882,12 +978,12 @@ namespace WindowerLauncher
             return Math.Min(Math.Max(overlap, 0), coresPerInstance - 1);
         }
 
-        private bool GetCoreConfig(out CoreConfig[] coreConfigs, int? countOverride = null, string label = null)
+        private bool GetCoreConfig(out CoreConfig[] coreConfigs, int? countOverride = null, string label = null, Func<int, string> getLabel = null)
         {
-            return this.GetCoreConfig(out coreConfigs, out var _, out var _, countOverride, label);
+            return this.GetCoreConfig(out coreConfigs, out var _, out var _, countOverride, label, getLabel);
         }
 
-        private bool GetCoreConfig(out CoreConfig[] coreConfigs, out int coresPerInstance, out int overlap, int? countOverride = null, string label = null)
+        private bool GetCoreConfig(out CoreConfig[] coreConfigs, out int coresPerInstance, out int overlap, int? countOverride = null, string label = null, Func<int, string> getLabel = null)
         {
             coreConfigs = null;
             coresPerInstance = 0;
@@ -925,6 +1021,11 @@ namespace WindowerLauncher
                         {
                             assignedCores[key]++;
                         }
+                    }
+
+                    if (getLabel != null)
+                    {
+                        label = getLabel(i);
                     }
 
                     coreConfigs[i] = new CoreConfig(core, coresPerInstance);
